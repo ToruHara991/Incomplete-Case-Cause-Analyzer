@@ -1,10 +1,10 @@
-<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>未完工案件圖表產生器 v2（含逾期案號）</title>
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>未完工案件圖表產生器 v3（含逾期案號、逾期可多件）</title>
 <style>body{font-family:"Microsoft JhengHei",sans-serif;margin:0;background:#eef1f5;color:#223}
 header{background:#fff;padding:12px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 4px #0002;position:sticky;top:0;z-index:2}
 button,label.b{background:#4a6f9a;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:14px}
 button.g{background:#7a8a99}input[type=text]{padding:7px;width:230px}#msg{color:#c00;font-size:13px}
 #out{padding:16px;overflow:auto}#out svg{background:#fff;box-shadow:0 1px 6px #0003}</style></head><body>
-<header><b>未完工案件圖表產生器 v2</b>
+<header><b>未完工案件圖表產生器 v3</b>
 <label class="b">① 選擇填報表_v2.xlsx<input id="f" type="file" accept=".xlsx,.xls" hidden></label>
 <button class="g" id="demo">載入範例</button>
 版型 <select id="mode"><option value="d">詳細（含逾期案號樹狀）</option><option value="o">總覽（只有圓餅＋逾期標示）</option></select>
@@ -28,14 +28,14 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const mk=()=>CAT.map(()=>({n:0,over:0,od:[],ok:[]}));
 function parse(rows){const h=rows.findIndex(r=>r&&r.includes('所別')&&r.includes('大項'));if(h<0)throw Error('找不到表頭(所別/大項/狀態/案號/說明/件數)');
  const H=rows[h].map(x=>String(x||'')),ix=p=>H.findIndex(x=>x.startsWith(p)),[a,b,s,c,t,n]=['所別','大項','狀態','案號','說明','件數'].map(ix),D={};
- for(const r of rows.slice(h+1)){const o=r[a],ci=CAT.indexOf(r[b]);if(!o||ci<0)continue;const st=String(r[s]||''),ov=st.includes('逾期')&&!st.includes('未'),cnt=ov?1:(Number(r[n])||0);if(!cnt)continue;
+ for(const r of rows.slice(h+1)){const o=r[a],ci=CAT.indexOf(r[b]);if(!o||ci<0)continue;const st=String(r[s]||''),ov=st.includes('逾期')&&!st.includes('未'),num=Number(r[n])||0,cnt=ov?(num>0?num:1):num;if(!cnt)continue;
   const k=(D[o]=D[o]||mk())[ci],tx=String(r[t]??'').trim();k.n+=cnt;
-  if(ov){k.over++;k.od.push({no:String(r[c]??'').trim(),t:tx})}else{const e=k.ok.find(x=>x.t==tx);e?e.n+=cnt:k.ok.push({t:tx,n:cnt})}}
+  if(ov){k.over+=cnt;k.od.push({no:String(r[c]??'').trim(),t:tx,n:cnt})}else{const e=k.ok.find(x=>x.t==tx);e?e.n+=cnt:k.ok.push({t:tx,n:cnt})}}
  ORDER.forEach(o=>D[o]=D[o]||mk());return D}
 const wd=s=>[...s].reduce((q,c)=>q+(c.charCodeAt(0)>255?1:.55),0);
 function wrap(s,m){const o=[];let l='',w=0;for(const c of s){const cw=c.charCodeAt(0)>255?1:.55;if(w+cw>m){o.push(l);l='';w=0}l+=c;w+=cw}if(l)o.push(l);return o}
 function lines(k,m){if(!(k.od.length||k.ok.some(x=>x.t)))return null;const L=[];
- if(k.od.length){L.push({t:`逾期兩個月：${k.over} 件`,h:1});k.od.forEach(c=>wrap(`${c.no||'—'}　${c.t}`,m).forEach((s,i)=>L.push({t:s,i:i?1:0})))}
+ if(k.od.length){L.push({t:`逾期兩個月：${k.over} 件`,h:1});k.od.forEach(c=>wrap(`${c.no||'—'}${c.n>1?`（${c.n}件）`:''}　${c.t}`,m).forEach((s,i)=>L.push({t:s,i:i?1:0})))}
  const ok=k.n-k.over;if(ok>0){L.push({t:`未逾期兩個月：${ok} 件`,h:2});k.ok.filter(x=>x.t).forEach(x=>wrap(x.t+(x.n>1?`（${x.n}件）`:''),m).forEach((s,i)=>L.push({t:s,i:i?1:0})))}return L}
 const lh=l=>l.h?28:22,bh=L=>L.reduce((s,l)=>s+lh(l),0)+16;
 function arc(cx,cy,r,a0,a1){const p=a=>[cx+r*Math.sin(a),cy-r*Math.cos(a)],[x0,y0]=p(a0),[x1,y1]=p(a1);return `M${cx} ${cy}L${x0} ${y0}A${r} ${r} 0 ${a1-a0>Math.PI?1:0} 1 ${x1} ${y1}Z`}
@@ -56,7 +56,7 @@ function card(c,x,y,W,H){const{o,d,Ls,rh,lx,lw,bx}=c,tot=d.reduce((s,k)=>s+k.n,0
    let ty=by+8;L.forEach(l=>{g+=T(l.t,bx+12+(l.i?30:0),ty+(l.h?19:16),l.h?16:15,'',l.h==1?RED:l.h==2?'#2e7d5b':'#333',l.h);ty+=lh(l)})}
   yy+=h});return g+'</g>'}
 function svgOf(list,nc,W,title){const P=24,gap=24;let y=80,out='';for(let i=0;i<list.length;i+=nc){const row=list.slice(i,i+nc),H=Math.max(...row.map(c=>c.H));row.forEach((c,j)=>out+=card(c,P+j*(W+gap),y,W,H));y+=H+gap}
- const TW=P*2+nc*W+(nc-1)*gap,TH=y;return{w:TW,h:TH,s:`<svg xmlns="http://www.w3.org/2000/svg" width="${TW}" height="${TH}" viewBox="0 0 ${TW} ${TH}" font-family="${FONT}"><rect width="100%" height="100%" fill="#fff"/><text x="${TW/2}" y="46" font-size="36" text-anchor="middle" fill="#3a5a80">${esc(title)}</text><text x="${TW/2}" y="68" font-size="14" text-anchor="middle" fill="#888"><tspan fill="${RED}" font-weight="bold">紅色</tspan>外圈／紅色標籤＝<tspan fill="${RED}" font-weight="bold">逾期兩個月</tspan></text>${out}</svg>`}}
+ const TW=P*2+nc*W+(nc-1)*gap,TH=y;return{w:TW,h:TH,s:`<svg xmlns="http://www.w3.org/2000/svg" width="${TW}" height="${TH}" viewBox="0 0 ${TW} ${TH}" font-family="${FONT}"><rect width="100%" height="100%" fill="#fff"/><text x="${TW/2}" y="46" font-size="36" text-anchor="middle" fill="#3a5a80">${esc(title)}</text><text x="${TW/2}" y="68" font-size="14" text-anchor="middle" fill="#888">紅色外圈／紅色標籤＝逾期兩個月</text>${out}</svg>`}}
 const cfg=()=>{const det=$('mode').value=='d',W=det?1150:560;return{det,W,nc:det?1:2}};
 const cards=()=>{const{det,W}=cfg();return Object.keys(DATA).sort((a,b)=>(ORDER.indexOf(a)+99)%99-(ORDER.indexOf(b)+99)%99).map(o=>prep(o,DATA[o],det,W))};
 function render(){if(!DATA)return;const{W,nc}=cfg();$('out').innerHTML=svgOf(cards(),nc,W,$('ti').value).s;}
@@ -64,7 +64,7 @@ function load(r){try{DATA=parse(r);$('msg').textContent='';render()}catch(e){$('
 $('f').onchange=async e=>{const f=e.target.files[0];if(!f)return;const wb=XLSX.read(await f.arrayBuffer());load(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.includes('填寫')?'填寫':wb.SheetNames[0]],{header:1}))};
 $('demo').onclick=()=>{const R=[['所別','大項','狀態','案號','說明','件數']],n={"基隆所":[20,1,3,2,30],"汐止所":[5,2,2,9,2],"淡水所":[4,2,25,4,16],"瑞芳所":[0,15,6,0,0],"萬金所":[0,1,0,19,1],"文山所":[0,1,1,0,0],"貢寮所":[1,69,14,1,4]};
  for(const o in n)n[o].forEach((v,i)=>{if(!v)return;let k=0;if(o=="基隆所"&&i==2){R.push([o,CAT[i],'逾期','#9X01','10/6合約尚未標出，待後續辦理決標作業'],[o,CAT[i],'逾期','#9X02','因鄰近建設單位施工，路權協調會尚待召開']);k=2;R.push([o,CAT[i],'未逾期','','範例：已送件待核可',v-k])}
-  else if(o=="汐止所"&&i==3){for(let j=3;j<6;j++)R.push([o,CAT[i],'逾期','#9X0'+j,'材料交期延宕，預計下週到貨後排定施工 範例']);R.push([o,CAT[i],'未逾期','','範例：已排定施工',v-3])}
+  else if(o=="汐止所"&&i==3){R.push([o,CAT[i],'逾期','#9X03','材料交期延宕，預計下週到貨後排定施工 範例'],[o,CAT[i],'逾期','#9X04-06','同上，一列填多件的範例',3]);R.push([o,CAT[i],'未逾期','','範例：已排定施工',v-4])}
   else R.push([o,CAT[i],'未逾期','','',v])});load(R)};
 $('ti').oninput=$('mode').onchange=render;
 function png(o,name){return new Promise(r=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=o.w*2;c.height=o.h*2;const x=c.getContext('2d');x.scale(2,2);x.drawImage(im,0,0);c.toBlob(b=>{dl(URL.createObjectURL(b),name);setTimeout(r,400)})};im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(o.s)})}
